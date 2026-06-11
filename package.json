@@ -1,0 +1,30 @@
+{
+  "name": "pi-dmail",
+  "version": "0.1.0",
+  "description": "D-Mail for pi — context checkpoint tool. Let the agent proactively manage its context window by sending messages back to past checkpoints like Steins;Gate D-Mail.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-coding-agent",
+    "pi-extension",
+    "context-management",
+    "checkpoint"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
