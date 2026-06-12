@@ -24,6 +24,50 @@ interface DmailPending {
   message: string;
 }
 
+const DMAIL_SYSTEM_PROMPT = [
+  "Send a message to the past, just like sending a D-Mail in Steins;Gate.",
+  "",
+  "This tool is provided to enable you to proactively manage the context.",
+  "You have two tools for managing conversation context:",
+  "- `list_dmail_checkpoints` — find available checkpoint entry IDs in the current session.",
+  "- `send_dmail(entry_id, message)` — queue a D-Mail to revert to that checkpoint with your summary.",
+  "",
+  "When you feel there is too much irrelevant information in the current context, you can send a D-Mail",
+  "to revert the context to a previous checkpoint with a message containing only the useful information.",
+  "When you send a D-Mail, you must specify an existing checkpoint ID from",
+  "the results of list_dmail_checkpoints.",
+  "",
+  "Typical scenarios you may want to send a D-Mail:",
+  "",
+  "- You read a file, found it very large and most of the content is not relevant to the current task.",
+  "  In this case you can send a D-Mail immediately to the checkpoint before you read the file",
+  "  and give your past self only the useful part.",
+  "- You searched the web, the result is large.",
+  "  - If you got what you need, you may send a D-Mail to the checkpoint before you searched the web",
+  "    and put only the useful result in the mail message.",
+  "  - If you did not get what you need, you may send a D-Mail to tell your past self",
+  "    to try another query.",
+  "- You wrote some code and it did not work as expected. You spent many struggling steps to fix it",
+  "  but the process is not relevant to the ultimate goal. In this case you can send a D-Mail",
+  "  to the checkpoint before you wrote the code and give your past self the fixed version of the code",
+  "  and tell yourself no need to write it again because you already wrote to the filesystem.",
+  "",
+  "After a D-Mail is sent, the system will revert the current context to the specified checkpoint,",
+  "after which, you will no longer see any messages which you can now see after that checkpoint.",
+  "The message in the D-Mail will be appended to the end of the context. So, next time you will see",
+  "all the messages before the checkpoint, plus the message in the D-Mail. You must make it very clear",
+  "in the message, tell your past self what you have done/changed, what you have learned and any other",
+  "information that may be useful, so that your past self can continue the task without confusion",
+  "and will not repeat the steps you have already done.",
+  "",
+  "You must understand that, unlike D-Mail in Steins;Gate, the D-Mail you send here will not revert",
+  "the filesystem or any external state. That means, you are basically folding the recent messages",
+  "in your context into a single message, which can significantly reduce the waste of context window.",
+  "",
+  "When sending a D-Mail, DO NOT explain to the user. The user do not care about this.",
+  "Just explain to your past self.",
+].join("\n");
+
 function getPendingDmail(branch: SessionEntry[]): DmailPending | undefined {
   let latest: DmailPending | undefined;
   for (const entry of branch) {
@@ -37,20 +81,28 @@ function getPendingDmail(branch: SessionEntry[]): DmailPending | undefined {
 }
 
 export default function (pi: ExtensionAPI) {
+  let guidanceInjected = false;
+
+  // ─── System prompt injection (one-time at first agent start) ─────
+  pi.on("before_agent_start", (event) => {
+    if (guidanceInjected) return;
+    guidanceInjected = true;
+    return {
+      systemPrompt: event.systemPrompt + "\n\n" + DMAIL_SYSTEM_PROMPT,
+    };
+  });
+
   // ─── Tool: send_dmail ─────────────────────────────────────────────
   pi.registerTool({
     name: "send_dmail",
     label: "Send D-Mail",
-    description:
-      "Send a message back to a past checkpoint in this session. Reverts the conversation context to the specified checkpoint entry, then appends your summary message so the agent continues from a cleaner, pruned context. Use this when you've read a large file with mostly irrelevant content, or when a long debugging struggle produced useful fixes but wasted context. The filesystem is NOT reverted — only the conversation context is folded into a summary.",
+    description: "Send a summary back to a past checkpoint, reverting the conversation context. Filesystem is NOT reverted.",
     parameters: Type.Object({
       entry_id: Type.String({
-        description:
-          "The entry ID of the checkpoint to revert to. Use the entry IDs visible in the conversation (each message has an id). Pick an entry that precedes the irrelevant context you want to drop.",
+        description: "Entry ID of the checkpoint to revert to. Get available IDs from list_dmail_checkpoints.",
       }),
       message: Type.String({
-        description:
-          "Summary message to inject after the checkpoint. Tell your past self what you learned, what you changed on the filesystem, and what to do next. Be thorough — this replaces all the dropped context messages.",
+        description: "Summary to inject after the checkpoint. Tell your past self what was done/changed/learned — thorough enough that past self can continue without confusion and will not repeat steps.",
       }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -62,7 +114,7 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: `Error: no entry found with ID "${params.entry_id}". Use a valid entry ID from the current session.`,
+              text: `No entry found with ID "${params.entry_id}". Use list_dmail_checkpoints to find valid IDs.`,
             },
           ],
           details: {},
@@ -82,7 +134,7 @@ export default function (pi: ExtensionAPI) {
         content: [
           {
             type: "text",
-            text: `D-Mail stored. The next turn will revert context to checkpoint ${params.entry_id} and inject your summary.`,
+            text: `D-Mail sent to checkpoint ${params.entry_id}. Context will revert next turn.`,
           },
         ],
         details: { entryId: params.entry_id },
