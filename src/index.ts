@@ -146,8 +146,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "list_dmail_checkpoints",
     label: "List D-Mail Checkpoints",
-    description:
-      "List recent user and assistant message entry IDs in the current session that can be used as D-Mail checkpoints. Useful before calling send_dmail to pick a checkpoint.",
+    description: "List available checkpoint entry IDs in the current session that send_dmail can revert to.",
     parameters: Type.Object({
       limit: Type.Optional(Type.Number({ description: "Max entries to show (default: 15)", default: 15 })),
     }),
